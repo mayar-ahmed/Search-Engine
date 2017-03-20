@@ -11,7 +11,7 @@ public class DB {
 	public DB() {
 		try {
 			Class.forName("com.mysql.jdbc.Driver");
-			String url = "jdbc:mysql://localhost:3306/Crawler";
+			String url = "jdbc:mysql://localhost:3306/search_engine";
 			conn = DriverManager.getConnection(url, "root", "root");
 			System.out.println("conn built");
 		} catch (SQLException e) {

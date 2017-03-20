@@ -25,6 +25,7 @@ import java.util.Set;
 import com.trigonic.jrobotx.util.DefaultURLInputStreamFactory;
 import com.trigonic.jrobotx.util.URLInputStreamFactory;
 
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 import static com.trigonic.jrobotx.Constants.*;
@@ -42,6 +43,8 @@ public class RobotExclusion {
 	
 	public RobotExclusion() {
 		this(new DefaultURLInputStreamFactory());
+		Logger.getRootLogger().setLevel(Level.OFF);
+
 	}
 
 	/**
