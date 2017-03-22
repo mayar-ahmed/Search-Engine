@@ -10,21 +10,23 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 
 public class Indexer {
-	private static ArrayList<String> SWords;
-	private HashMap<String, StemPost> Tokens;
+	 
+	private static ArrayList<String> SWords;		//stop words list
+	//regular expression for link (URL) detection
+	private static String LinkRegex = "\\b(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]";
+	private HashMap<String, StemPost> Terms;
 	private HashMap<String, HashMap<Integer,Posting>> StopWords;
 	private HashMap<Integer,String> Documents;
 	
 	public Indexer(HashMap<Integer,String> docs)
 	{
-	Tokens = new HashMap<String, StemPost>();
+	Terms = new HashMap<String, StemPost>();
 	Documents = docs;
 	StopWords = new HashMap<String, HashMap<Integer,Posting>>();
-	//Stems = new HashSet<String>();
 	}
 	public HashMap<String,StemPost> getTerms()
 	{
-		return Tokens;
+		return Terms;
 	}
 	public HashMap<String, HashMap<Integer,Posting>> getStopWords()
 	{
@@ -45,12 +47,6 @@ public class Indexer {
 		  catch(IOException e) {
 			  System.out.println("EXCEPTION STOPWORDS!!");
 		  };
-		  /*
-		  for(int j=0;j<SWords.size();j++)
-		  {
-			 System.out.println(SWords.get(j));
-		  }
-		  */
 		  
 	}
 	public void addStopWord(String k,int docid,int f,String p)
@@ -87,22 +83,17 @@ public class Indexer {
 		s.stem();
         return s.toString();
 	}
-	public void addToken(String k,int docid,int f,String p)
+	public void addTerm(String k,int docid,int f,String p)
 	{
 		//check if stop word return
 		if(SWords.contains(k))
 		{
 			this.addStopWord(k,docid,f,p);
-		//	System.out.printf("%s -> stopword\n",k);
 			return;
 		}
-		
-		/*if(p == "Title")
-			System.out.println(k);
-			*/
 		String s = this.stem(k);
 		
-		StemPost rec = Tokens.get(k);
+		StemPost rec = Terms.get(k);
 		//New Term
 		if(rec == null)
 		{
@@ -110,7 +101,7 @@ public class Indexer {
 			//put stem
 			rec.DocMap.put(docid, new Posting(f,p));
 			rec.Stem=s;
-	        Tokens.put(k,rec);
+	        Terms.put(k,rec);
 		}
 		else
 		{
@@ -126,51 +117,85 @@ public class Indexer {
 			{post.Tf = post.Tf+1;
 			}
 			 
-			//list.add(new Posting(docid,f,p));
 		}
 	}
 	public void addTokens(String[] s, int docId,String pos)
 	{
-		//String temp;
 		for(int i=0;i<s.length;i++)
 		{
-			//temp = s[i].toLowerCase();
-			s[i] = s[i].replaceAll("[^a-zA-Z]", "").toLowerCase();
+			s[i] = s[i].toLowerCase();
 			if(s[i].trim().equals(""))
 				continue;
-			this.addToken(s[i],docId,1,pos);
+			
+			if(s[i].contains("-"))
+			{
+				String[] dashed = s[i].split("-");
+				
+				for(int j=0;j<dashed.length;j++)
+				{
+					if(dashed[j].length()>50 || dashed[j].length()<2 || dashed[j].matches("[0-9]+"))
+						continue;
+					this.addTerm(dashed[j],docId,1,pos);
+				}
+				s[i] = s[i].replace("-","");
+				if(s[i].length()>50 || s[i].length()<2 || s[i].matches("[0-9]+"))
+					continue;
+				this.addTerm(s[i],docId,1,pos);
+			}
+			else{
+				if(s[i].length()>50 || s[i].length()<2 || s[i].matches("[0-9]+"))
+					continue;
+				this.addTerm(s[i],docId,1,pos);
+			}
 		}
+	}
+	public void index()
+	{
+		System.out.println("Indexing .. ");
+		this.tokenizer();
 	}
 	public void tokenizer()
 	{
 		for (Map.Entry<Integer, String> entry : Documents.entrySet())
 		{
-			int j = entry.getKey();
+		
+		int j = entry.getKey();
 		String input = entry.getValue();
 		Document doc = Jsoup.parse(input);
-		//String link = doc.select("a").text();
+		
 		String title = doc.select("title").text();
-		String[] titles = title.split( " " );
+		title = title.replaceAll(LinkRegex, "");
+		title = title.replaceAll("[.']", "");
+		String[] titles = title.split( "[^a-zA-Z0-9-]" );
+		
 		String hTag = doc.select("h1, h2, h3, h4, h5, h6, a").text();
-		String[] hTags = hTag.split( " " );
+		hTag = hTag.replaceAll(LinkRegex, "");
+		hTag = hTag.replaceAll("[.']", "");
+		String[] hTags = hTag.split("[^a-zA-Z0-9-]");
+		
 		doc.select("h1, h2, h3, h4, h5, h6, a, title").remove();
-		String other = doc.body().text();
-		String[] others = other.split( " " );
+		String other = doc.text();
+		
+		System.out.println(j);
+		System.out.println(other);
+		other = other.replaceAll(LinkRegex, "");
+		other = other.replaceAll("[.']", "");
+		String[] others = other.split( "[^a-zA-Z0-9-]" );
 		
 		this.addTokens(titles, j, "Title");
 		this.addTokens(hTags, j, "Heading");
 		this.addTokens(others, j, "Content");
+		
+		System.out.printf("Doc #%d tokenized",j);
 		
 		}
 		
 		
 		try{
 		    PrintWriter writer = new PrintWriter("out.txt");
-		    writer.println(Tokens.size());
-			for (Map.Entry<String, StemPost> entry : Tokens.entrySet())
-			{
-				//System.out.printf("Term: %s Stem: %s \n",entry.getKey(),entry.getValue().Stem);
-				
+		    writer.println(Terms.size());
+			for (Map.Entry<String, StemPost> entry : Terms.entrySet())
+			{				
 				writer.printf("Term:%s Stem:%s, Df: %d\n",entry.getKey(),entry.getValue().Stem,entry.getValue().DocMap.size());
 			    
 			    for(Map.Entry<Integer,Posting> entry2 : (entry.getValue()).DocMap.entrySet())
@@ -181,25 +206,9 @@ public class Indexer {
 			}
 		    writer.close();
 		} catch (IOException e) {
-		   // do something
+		   
 		}
 		
-		
-		/*
-		System.out.println(Tokens.size());
-		for (Map.Entry<String, StemPost> entry : Tokens.entrySet())
-		{
-			//System.out.printf("Term: %s Stem: %s \n",entry.getKey(),entry.getValue().Stem);
-			
-		    System.out.printf("Term: %s Stem: %s, Df: %d\n",entry.getKey(),entry.getValue().Stem,entry.getValue().DocMap.size());
-		    
-		    for(Map.Entry<Integer,Posting> entry2 : (entry.getValue()).DocMap.entrySet())
-		    {
-		    	System.out.println(entry2.getKey() + "/" + entry2.getValue().Tf + "/" + entry2.getValue().Pos);
-		    }
-		    
-		}
-		*/
 	}
 
 }
