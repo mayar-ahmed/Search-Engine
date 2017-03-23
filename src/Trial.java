@@ -28,14 +28,26 @@ public class Trial {
         } catch (FileNotFoundException e) {
             System.out.println("error loading frontier");
         }
+        int count = 0;
         while (in.hasNext()) {
-            String s= in.next();
-            if(f.equals(s))
-                System.out.println("duplicate : " +s );
-            else
+            String s = in.nextLine();
+            if (f.contains(s)) {
+                System.out.println("duplicate : " + s);
+                count++;
+            } else
                 f.add(s);
 
         }
         in.close();
+        try {
+            URLNORM c =new URLNORM("http://wikihow.com/Main-Page");
+            String m = (c.getScheme() + "://" + c.getNormalizedUrl()).toLowerCase();
+            System.out.println(m);
+
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        }
+
+
     }
 }

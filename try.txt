@@ -1,6 +1,6 @@
 https://archive.org
 https://en.wikipedia.org
-http://wikihow.com/Main-Page
+http://wikihow.com/main-page
 https://nytimes.com
 http://bbc.com
 http://w3.org

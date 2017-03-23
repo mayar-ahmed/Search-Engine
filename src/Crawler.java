@@ -30,14 +30,16 @@ public class Crawler {
     private File front;
     private FileWriter frontWriter;
     int refreshed;
+    int stop;
 
 
-    public Crawler() { //initialize crawler
+    public Crawler(int stop) { //initialize crawler
 
         frontier = new LinkedList<String>();
         visited = new LinkedList<String>();
         docs = 0;
         refreshed = 0;
+        this.stop=stop;
         front = new File("frontier.txt"); //to save frontier
         try {
             frontWriter = new FileWriter(front, true);
@@ -57,7 +59,8 @@ public class Crawler {
 
             String url = "";
             synchronized (this) {
-                if (docs > 5000)
+
+                if (docs > stop)
                     break;
                 while (frontier.isEmpty()) {
                     try {
@@ -67,6 +70,10 @@ public class Crawler {
                     }
                 }
                 url = frontier.remove();
+                if(visited.contains(url))
+                    continue;
+
+                visited.add(url);
 
             }
             try {
@@ -137,7 +144,10 @@ public class Crawler {
             System.out.println("couldn't download " + url);
             return null;
         }
+
+
         String s = doc.html();
+
 
         //check language before saving
         String txt1 = doc.title();
@@ -160,6 +170,7 @@ public class Crawler {
         String sql = "insert into documents (url,content) VALUES ( ? , ?);";
 
         try {
+
             PreparedStatement stmt = (PreparedStatement) crawlerDB.conn.prepareStatement(sql);
             stmt.setString(1, url);
             stmt.setString(2, s);
@@ -172,7 +183,8 @@ public class Crawler {
 
         //add to visited pages, no two can access visited and docs at the same time
         synchronized (this) {
-            visited.add(url);
+
+           // visited.add(url);
             docs++;
             System.out.println(url);
 
@@ -192,7 +204,7 @@ public class Crawler {
         //extract links from page
         Elements linksOnPage = doc.select("a[href]");
 
-        List<String> mylinks = new LinkedList<String>();
+        List<String> myLinks = new LinkedList<String>();
         System.out.println("extracting links");
 
         for (Element page : linksOnPage) //for every link on page
@@ -203,11 +215,11 @@ public class Crawler {
             //normalize url
             URLNORM n = null; //normalized
             String normalized = ""; //normalized with http:// at the beginning
-            URL l = null; //wrapped in url class
             try {
                 n = new URLNORM(link);
-                normalized = n.getScheme() + "://" + n.getNormalizedUrl();
-                l = new URL(normalized);
+                normalized = (n.getScheme() + "://" + n.getNormalizedUrl()).toLowerCase();
+
+
             } catch (MalformedURLException e) {
                 if(!link.trim().equals(""))
                     System.out.println(link + " isn't a valid url");
@@ -215,8 +227,8 @@ public class Crawler {
             }
 
 
-            if (!normalized.contains("login") && !normalized.contains("signup") && !normalized.contains("signin") && !mylinks.contains(normalized))
-                mylinks.add(normalized);
+            if (!normalized.contains("login") && !normalized.contains("signup") && !normalized.contains("signin") && !myLinks.contains(normalized))
+                myLinks.add(normalized);
         }
 
 
@@ -224,22 +236,18 @@ public class Crawler {
         synchronized (this){
             //remove elements that were previously found in visited and queue
             try {
-                System.out.println("Thread " + Thread.currentThread().getId() + "\n");
 
-                mylinks.removeAll(frontier);
-                mylinks.removeAll(visited);
+                //remove queued and visited from extracted links
+                myLinks.removeAll(frontier);
+                myLinks.removeAll(visited);
 
+                frontier.addAll(myLinks); //add them to queue
 
-                frontier.addAll(mylinks); //add them to queue
-                frontier.removeAll(Arrays.asList(frontier)); //remove duplicates from queue if found
-
-                //append to frontier
-                FileUtils.writeLines(new File("frontier.txt"), mylinks, true);
+                FileUtils.writeLines(new File("frontier.txt"), frontier, false); //write frontier to file
 
             } catch (IOException e) {
                 e.printStackTrace();
             }
-
         }
 
 
@@ -300,9 +308,6 @@ public class Crawler {
         return true; //english language
     }
 
-    public int getDocs() {
-        return docs;
-    }
 
     public void loadHistory() { //to load list of visited and last frontier from database at start
 
@@ -334,7 +339,9 @@ public class Crawler {
             System.out.println("error loading frontier");
         }
         while (in.hasNext()) {
-            f.add(in.next());
+            String m = in.nextLine();
+            if(!f.contains(m))
+                f.add(m);
         }
         in.close();
 
@@ -347,6 +354,7 @@ public class Crawler {
         frontier = f;
 
         docs = visited.size();
+
 
 
     }
