@@ -1,0 +1,28 @@
+eclipse settings:
+1- open run
+2- run configurations
+3- open arguments
+4- write those lines:check the eclipse_settings image
+-Xms512M -Xmx4G
+-XX:+UseConcMarkSweepGC
+
+mysql settings:
+check the mysql_settings image and make sure the settings are the same as in the picture
+
+database creation:
+from mysql console bec its faster:
+1- create database search_engine;
+2- use database;
+3-use finalDBscript in this project bec its different again
+4- to import 6000docs:
+source (path)/6000docs.sql;
+it might give an error if there is a "\" in path
+example:
+this is correct: D:/java/project/6000docs.sql
+this isnt:  D:\java\project\6000docs.sql
+5- wait :D 
+
+in eclipse to run:
+1- open indexer and make sure stopwords path in line 39 is the same as your own
+2- make sure the db class variables are as your own
+3- Run :D wait for an hour and half

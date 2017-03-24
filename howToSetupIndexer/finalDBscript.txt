@@ -1,0 +1,40 @@
+
+CREATE TABLE terms(
+    term VARCHAR(50) NOT NULL unique,
+    stem VARCHAR(50) NOT NULL,
+    df INT,
+   	primary key (term)
+)ENGINE=INNODB;
+
+create table stop_words(
+    stop_word varchar(20) not null,
+    df int not null,
+    primary key(stop_word)
+)ENGINE=INNODB;
+
+CREATE TABLE documents (
+  id int(11) NOT NULL AUTO_INCREMENT,
+  url text NOT NULL,
+  content mediumtext NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB AUTO_INCREMENT=0 DEFAULT CHARSET=latin1;
+
+create table stop_doc(
+    doc_id int(11) not null,
+   	stop_word varchar(20) not null,
+   	tf int not null,
+    location int not null,
+  	FOREIGN KEY (stop_word) REFERENCES stop_words(stop_word),
+  	FOREIGN KEY (doc_id) REFERENCES documents(id),
+    CONSTRAINT doc_stop primary key (doc_id,stop_word)
+)ENGINE=INNODB;
+
+create table term_doc(
+    term varchar(50) not null,
+    doc_id int(11) not null,
+    tf int not null,
+    location int not null,
+    constraint term_doc primary key (term,doc_id),
+    FOREIGN KEY (term) REFERENCES terms(term),
+    FOREIGN KEY (doc_id) REFERENCES documents(id)
+)ENGINE=INNODB ;

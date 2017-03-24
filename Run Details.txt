@@ -1,0 +1,25 @@
+starting
+11:05:05
+docs retrieved
+11:05:11
+In tokenizer
+indexer done
+11:05:47
+stop words inserted168
+11:05:47
+terms string made
+11:05:48
+stop docs inserted330754
+11:08:08
+stop words inserted
+11:08:08
+terms inserted204279
+11:10:43
+term_doc string made
+11:10:43
+term_doc inserted2750117
+12:34:26
+terms Inserted
+12:34:26
+223933 i am done
+12:34:26
