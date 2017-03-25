@@ -213,7 +213,6 @@ public class Indexer {
 			}
 		    writer.close();
 		} catch (IOException e) {
-		   // do something
 			System.out.println("writer exception");
 		}
 		
