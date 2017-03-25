@@ -33,3 +33,4 @@ check the mysql_settings image and make sure the settings are the same as in the
 - open Indexer.java and make sure stopwords path in line 39 is the same as your own
 - make sure the DB class variables (user name and password) are as your own
 - Run IndexerMain.java, it should take about an hour and half
+-Run Details.txt will contain infromation about the run time of the indexer
