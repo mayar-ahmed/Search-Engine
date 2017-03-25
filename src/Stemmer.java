@@ -1,4 +1,7 @@
-//package project;
+/*
+Source code is taken from:
+https://tartarus.org/martin/PorterStemmer/java.txt
+*/
 
 /*
 
