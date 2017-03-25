@@ -3,14 +3,7 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.HashMap;
 
-
-
- 
-
-
-public class Main {
-//handling hyphens
-	
+public class Main {	
 	
 	public static void main(String[] args) {
 		
