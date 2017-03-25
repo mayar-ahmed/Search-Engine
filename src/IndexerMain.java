@@ -8,7 +8,7 @@ import java.util.HashMap;
  
 
 
-public class Main {
+public class IndexerMain {
 //handling hyphens
 	
 	

@@ -6,10 +6,10 @@ import java.util.*;
  
 
 public class DB implements Runnable{
-	private static Connection conn;
+	public static Connection conn;
 	private static String URL = "jdbc:mysql://localhost/search_engine?useSSL=false";
 	private static String USER = "root";
-	private static String PASS = "";
+	private static String PASS = "root";
 	private static Statement stmt;
 	HashMap<String, HashMap<Integer,Posting>> StopWords;
 	HashMap<String, StemPost> terms;
@@ -247,11 +247,11 @@ public class DB implements Runnable{
 				try {
 					//fill terms table
 					System.out.println("terms string made");
-					Main.printTime();
+					IndexerMain.printTime();
 					r1 = exe(termsQ.toString());
 					Toolkit.getDefaultToolkit().beep();
 					System.out.println("terms inserted"+r1);
-					Main.printTime();
+					IndexerMain.printTime();
 					//while (r1.next())
 					//	termID = r1.getLong(1);
 				} catch (SQLException e) {
@@ -260,11 +260,11 @@ public class DB implements Runnable{
 				try {
 					//fill term_doc table
 					System.out.println("term_doc string made");
-					Main.printTime();
+					IndexerMain.printTime();
 					int rows=exe(tdQ.toString());
 					Toolkit.getDefaultToolkit().beep();
 					System.out.println("term_doc inserted"+rows);
-					Main.printTime();
+					IndexerMain.printTime();
 					
 				} catch (SQLException e) {
 					
@@ -272,7 +272,7 @@ public class DB implements Runnable{
 				} 
 				Toolkit.getDefaultToolkit().beep();
 				System.out.println("terms Inserted");
-				Main.printTime();
+				IndexerMain.printTime();
 	}
 
 	private static void stopWordsFillTables(HashMap<String, HashMap<Integer,Posting>> StopWords)
@@ -326,7 +326,7 @@ public class DB implements Runnable{
 			int r = exe(stQ.toString());
 			Toolkit.getDefaultToolkit().beep();
 			System.out.println("stop words inserted"+r);
-			Main.printTime();
+			IndexerMain.printTime();
 			} catch (SQLException e) {
 				
 					e.printStackTrace();
@@ -336,13 +336,13 @@ public class DB implements Runnable{
 			int rows2=exe(stdocQ.toString());
 			Toolkit.getDefaultToolkit().beep();
 			System.out.println("stop docs inserted"+rows2);
-			Main.printTime();
+			IndexerMain.printTime();
 		} catch (SQLException e) {
 			
 			e.printStackTrace();
 		}
 		System.out.println("stop words inserted");
-		Main.printTime();
+		IndexerMain.printTime();
 	}
 	public void close(){
 		//close database connection
@@ -385,6 +385,24 @@ public class DB implements Runnable{
 			e.printStackTrace();
 		} 
 		return temp;
+	}
+
+
+	public ResultSet runSql(String sql) throws SQLException {
+		Statement sta = conn.createStatement();
+		return sta.executeQuery(sql);
+	}
+
+	public boolean runSql2(String sql) throws SQLException {
+		Statement sta = conn.createStatement();
+		return sta.execute(sql);
+	}
+
+	@Override
+	protected void finalize() throws Throwable {
+		if (conn != null || !conn.isClosed()) {
+			conn.close();
+		}
 	}
 
 	

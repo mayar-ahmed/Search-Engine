@@ -51,14 +51,14 @@ public class Crawler {
 
     public void crawl() {
 
-        CDB crawlDB = new CDB();
+        DB crawlDB = new DB();
         robots = new RobotExclusion();
         while (true) {
 
             String url = "";
             synchronized (this) {
 
-                if (docs > stop)
+                if (docs > stop) // if stopping condition is true, stop crawling
                     break;
                 while (frontier.isEmpty()) {
                     try {
@@ -80,6 +80,7 @@ public class Crawler {
                 if (!robots.allows(new URL(url), "mayar"))
                     continue;
 
+                //send a request to the page
                 Response response = Jsoup.connect(url).userAgent("Mozilla").timeout(12000).ignoreHttpErrors(true).execute();
                 int statusCode = response.statusCode();
 
@@ -96,31 +97,25 @@ public class Crawler {
                 {
                     Document doc = downloadPage(response,url, crawlDB);
                     if (doc == null) {
-                        //an error happend in downloading
+                        //an error happend in downloading, get another page
                         continue;
                     }
                     //extract links from downloaded page
                     extractLinks(doc);
 
-                } else //there's an error in response (internet might be down)
+                } else //there's an error in response, display it and continue crawling
                 {
-                    if (statusCode != 400)
-                        System.out.println("Error in: " + url + " " + statusCode + " " + response.statusMessage());
-                    else
-                    {
-                        System.out.println("Bad request in " + url);
-
-                    }
+                    System.out.println("Error in: " + url + " " + statusCode + " " + response.statusMessage());
 
                 }
 
 
-            } catch (IOException e) { //exception occured while fetching page
+            } catch (IOException e) { //exception occured while sending request to page
 
                 System.err.println("Error in'" + url + "': " + e.getMessage());
                 String m = e.getMessage();
-                if(m.contains("connect timed out") || m.contains("Read timed out"))
-                    Wait();
+                if(m.contains("connect timed out") || m.contains("Read timed out")) //this means internet might be down
+                    Wait(); //checks connection ans wait until it's susccessful
 
             }
         }
@@ -128,13 +123,14 @@ public class Crawler {
 
     }
 
-    public Document downloadPage(Response response, String url, CDB crawlerDB) {
+    public Document downloadPage(Response response, String url, DB crawlerDB) {
         //connection is not thread safe so each thread creates it local connection in crawl and passes it
         //fetch page
 
         Document doc = null;
 
         try {
+            //fetch page content from responce
             doc = response.parse();
 
         } catch (IOException e) {
@@ -143,11 +139,11 @@ public class Crawler {
             return null;
         }
 
-
+        //get html file
         String s = doc.html();
 
 
-        //check language before saving
+        //check language before saving by cehcking the tilte and first header in page
         String txt1 = doc.title();
         Element h1 = doc.getElementsByTag("h1").first();
         String txt2="";
@@ -155,7 +151,6 @@ public class Crawler {
         {
             txt2=h1.text();
         }
-       // String txt3 = doc.select("h2").first().text();
 
 
         if (! (checkLanguage(txt1) && checkLanguage(txt2)))
@@ -179,7 +174,7 @@ public class Crawler {
         }
 
 
-        //add to visited pages, no two can access visited and docs at the same time
+        // no two can access docs at the same time, lock it and incement number of downloaded documents
         synchronized (this) {
 
            // visited.add(url);
@@ -188,7 +183,7 @@ public class Crawler {
 
         }
 
-        //successful fetch
+        //successful fetch , if not null is returned
         return doc;
 
 
@@ -218,12 +213,13 @@ public class Crawler {
                 normalized = (n.getScheme() + "://" + n.getNormalizedUrl()).toLowerCase();
 
 
-            } catch (MalformedURLException e) {
+            } catch (MalformedURLException e) { //if url isn't in  a valid format , exception thrown
                 if(!link.trim().equals(""))
                     System.out.println(link + " isn't a valid url");
                 continue;
             }
 
+            //check that url doesn't contain login, ads or not extracted already
 
             if (!normalized.contains("login") && !normalized.contains("signup") && !normalized.contains("signin") && !myLinks.contains(normalized))
                 myLinks.add(normalized);
@@ -232,7 +228,6 @@ public class Crawler {
 
         //add extracted links to frontier if they're not duplicated
         synchronized (this){
-            //remove elements that were previously found in visited and queue
             try {
 
                 //remove queued and visited from extracted links
@@ -241,7 +236,7 @@ public class Crawler {
 
                 frontier.addAll(myLinks); //add them to queue
 
-                FileUtils.writeLines(new File("frontier.txt"), frontier, false); //write frontier to file
+                FileUtils.writeLines(new File("frontier.txt"), frontier, false); //write frontier to file to save state
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -265,6 +260,7 @@ public class Crawler {
 
     public boolean checkConnectivity() {
         try {
+            //send request to google with large timeout, if not successful there's probably a connection problem
             Response response = Jsoup.connect("https://google.com").userAgent("Mozilla").timeout(15000).ignoreHttpErrors(true).execute();
             int statusCode = response.statusCode();
 
@@ -281,12 +277,12 @@ public class Crawler {
     }
 
     public boolean checkLanguage(String txt) {
+        //some extended ascii codes that migh be mistaken for another language
         int[] chars = {8220, 8221, 8226, 8211, 8212, 732, 8482, 169, 174, 175,8230,8217, 8216};
         char[] myNameChars = txt.toCharArray();
 
         for (int i = 0; i < txt.length(); i++) {
             int x = (int) myNameChars[i];
-          //  System.out.print(x + " ");
             for (int j = 0; j < chars.length; j++) {
                 if (x == chars[j]) {
                     myNameChars[i] = ' ';
@@ -294,22 +290,23 @@ public class Crawler {
             }
 
         }
+        //remove extended ascii and replace them with spaces
         String mytxt = String.valueOf(myNameChars);
 
 
         String s = mytxt.replaceAll("!", "");
         String t = s.replaceAll("|", "");
         String r = t.replaceAll("\\P{InBasic_Latin}", "!"); //replce non english unicode with !
-        if (r.contains("!"))
+        if (r.contains("!")) //check if there are any resulting ! after replacing
             return false; //language is non english
 
         return true; //english language
     }
 
 
-    public void loadHistory() { //to load list of visited and last frontier from database at start
+    public void loadHistory() { //to load list of visited and last frontier (queue) from database at start
 
-        CDB db = new CDB();
+        DB db = new DB();
         String query = "SELECT url FROM documents;"; //getting list of visited from database
 
         ResultSet result = null;
@@ -351,22 +348,22 @@ public class Crawler {
         visited = s;
         frontier = f;
 
-        docs = visited.size();
+        docs = visited.size();// set number of downloaded documents to files in database
 
 
 
     }
 
     public void updateVisited() {
-        CDB crawlerDB = new CDB();
+        //updating downloaded documents starting from oldest
+        DB crawlerDB = new DB();
 
         String[] arr = null;
         synchronized (this) {
             arr = new String[visited.size()];
             arr = visited.toArray(arr);
         }
-        //System.out.println(Arrays.toString(arr));
-        //System.out.println(visited.size());
+
         while (true) {
             String url = "";
             synchronized (this) {
@@ -397,17 +394,13 @@ public class Crawler {
                         System.out.println("error in updating database");
                         continue;
                     }
-                } /*else if (!checkConnectivity()) //if internet is down don't do anyhting otherwise ignore page
-                {
-                    System.out.println("no internet");
-                    Wait();
-                }*/
+                }
 
                 System.out.println(url + " updated");
 
             } catch (IOException e) {
                 System.err.println("Error in updating " + url + "': " + e.getMessage());
-                if(e.getMessage().contains("connect timed out"))
+                if(e.getMessage().contains("connect timed out") || e.getMessage().contains("Read timed out"))
                     Wait();
 
 
