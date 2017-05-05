@@ -6,8 +6,9 @@ import java.util.*;
  
 
 public class DB implements Runnable{
-	public static Connection conn;
-	private static String URL = "jdbc:mysql://localhost/search_engine?useSSL=false";
+	private static Connection conn;
+	public Connection conn2;
+	private static String URL = "jdbc:mysql://localhost/search_engine_old?useSSL=false";
 	private static String USER = "root";
 	private static String PASS = "root";
 	private static Statement stmt;
@@ -18,8 +19,7 @@ public class DB implements Runnable{
 			Class.forName("com.mysql.jdbc.Driver").newInstance();
 			
 			conn = DriverManager.getConnection(URL, USER, PASS);
-			
-			
+			conn2=conn;
 			}
 			catch(ClassNotFoundException ex) {
 				   System.out.println("Error: unable to load driver class!");

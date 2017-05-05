@@ -9,10 +9,8 @@ public class CrawlerMain {
         int stop=6000; //stopping condition (no. of download docs)
         Crawler c = new Crawler(stop);
         ThreadController controller = new ThreadController(size);
-        controller.crawl(c); //add pages
+        /*controller.crawl(c); //add pages*/
         controller.update(c); //update
-
-
 
     }
 

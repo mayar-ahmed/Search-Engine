@@ -6,10 +6,14 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 import java.io.*;
+import java.math.BigInteger;
 import java.net.MalformedURLException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.*;
 
 import java.net.URL;
@@ -18,40 +22,33 @@ import java.util.List;
 
 import com.trigonic.jrobotx.RobotExclusion;
 import ch.sentric.URLNORM;
+import sun.awt.image.ImageWatched;
 
 
 public class Crawler {
     private Queue<String> frontier;
-    private Queue<String> visited;
+    private HashSet<String> visited;
     private int docs;
     private RobotExclusion robots;
-    private File front;
-    private FileWriter frontWriter;
-    int refreshed;
-    int stop;
+    private int refreshed;
+    private int stop;
 
 
     public Crawler(int stop) { //initialize crawler
 
         frontier = new LinkedList<String>();
-        visited = new LinkedList<String>();
+        visited = new HashSet<String>();
         docs = 0;
         refreshed = 0;
-        this.stop=stop;
-        front = new File("frontier.txt"); //to save frontier
-        try {
-            frontWriter = new FileWriter(front, true);
-
-        } catch (IOException e) {
-            System.out.println("error opening frontier file");
-        }
+        this.stop = stop;
 
         loadHistory();
+        System.out.println("finished loading history");
     }
 
     public void crawl() {
 
-        DB crawlDB = new DB();
+
         robots = new RobotExclusion();
         while (true) {
 
@@ -61,6 +58,7 @@ public class Crawler {
                 if (docs > stop) // if stopping condition is true, stop crawling
                     break;
                 while (frontier.isEmpty()) {
+                    System.out.println("empty frontier");
                     try {
                         wait();
                     } catch (InterruptedException e) {
@@ -68,16 +66,17 @@ public class Crawler {
                     }
                 }
                 url = frontier.remove();
-                if(visited.contains(url))
+                if (visited.contains(url))
                     continue;
 
                 visited.add(url);
+                System.out.println(url);
 
             }
             try {
 
                 //if page isn't allowed by robots don't access it
-                if (!robots.allows(new URL(url), "mayar"))
+                if (!robots.allows(new URL(url), "Mozilla"))
                     continue;
 
                 //send a request to the page
@@ -95,13 +94,12 @@ public class Crawler {
 
                 if (statusCode == 200 && type.contains("text/html")) //successful response && file is html
                 {
-                    Document doc = downloadPage(response,url, crawlDB);
-                    if (doc == null) {
+                    int doc = downloadPage(response, url); //download page and extract links
+                    if (doc == -1) {
                         //an error happend in downloading, get another page
                         continue;
                     }
-                    //extract links from downloaded page
-                    extractLinks(doc);
+
 
                 } else //there's an error in response, display it and continue crawling
                 {
@@ -114,7 +112,7 @@ public class Crawler {
 
                 System.err.println("Error in'" + url + "': " + e.getMessage());
                 String m = e.getMessage();
-                if(m.contains("connect timed out") || m.contains("Read timed out")) //this means internet might be down
+                if (m.contains("connect timed out") || m.contains("Read timed out")) //this means internet might be down
                     Wait(); //checks connection ans wait until it's susccessful
 
             }
@@ -123,9 +121,10 @@ public class Crawler {
 
     }
 
-    public Document downloadPage(Response response, String url, DB crawlerDB) {
+    public int downloadPage(Response response, String url) {
         //connection is not thread safe so each thread creates it local connection in crawl and passes it
         //fetch page
+        DB crawlerDB = new DB();
 
         Document doc = null;
 
@@ -136,68 +135,119 @@ public class Crawler {
         } catch (IOException e) {
             Wait(); //to check if internet is down, wit for it before proceeding with rest of code
             System.out.println("couldn't download " + url);
-            return null;
+            return -1;
         }
 
         //get html file
-        String s = doc.html();
+        String s = doc.body().html();
+        String txt = doc.body().text();
 
 
         //check language before saving by cehcking the tilte and first header in page
-        String txt1 = doc.title();
+        String title = doc.title();
         Element h1 = doc.getElementsByTag("h1").first();
-        String txt2="";
-        if(h1!=null)
-        {
-            txt2=h1.text();
+        String txt2 = "";
+        if (h1 != null) {
+            txt2 = h1.text();
         }
 
 
-        if (! (checkLanguage(txt1) && checkLanguage(txt2)))
-        {
+        if (!(checkLanguage(title) && checkLanguage(txt2))) {
             System.out.println(url + " page might not be english, exclude it");
-            return null; //if not a valid lang return null
+            return -1; //if not a valid lang return null
         }
 
         //download page here (add it to database)
-        String sql = "insert into documents (url,content) VALUES ( ? , ?);";
+        String sql = "insert into documents (url,content,text,rank,title) VALUES (?,?,?,?,?);";
+        int generatedId = 0;
 
+        if (s == null && s.isEmpty())
+            s = " ";
+        if (txt == null && txt.isEmpty())
+            txt = " ";
+        if (title == null && title.isEmpty())
+            title = " ";
         try {
 
-            PreparedStatement stmt = (PreparedStatement) crawlerDB.conn.prepareStatement(sql);
+            PreparedStatement stmt = (PreparedStatement) crawlerDB.conn2.prepareStatement(sql);
+            if (stmt == null)
+                return -1;
+
             stmt.setString(1, url);
             stmt.setString(2, s);
+            stmt.setString(3, txt);
+            stmt.setDouble(4, (1.0 / visited.size()));
+            stmt.setString(5, title);
             stmt.execute();
+            ResultSet rs = stmt.getGeneratedKeys();
+            if (rs.next()) {
+                generatedId = rs.getInt(1);
+                System.out.println("generetaed key is " + generatedId);
+            }
         } catch (SQLException e) {
             System.out.println("database error in downloading page");
-            return null; //can't save document
+            System.out.println(e.getMessage());
+            return -1; //can't save document
         }
 
 
         // no two can access docs at the same time, lock it and incement number of downloaded documents
         synchronized (this) {
 
-           // visited.add(url);
+            // visited.add(url);
             docs++;
             System.out.println(url);
 
         }
 
+        extractLinks(doc, generatedId);
+
         //successful fetch , if not null is returned
-        return doc;
+        return 0;
 
 
     }
 
-    public void extractLinks(Document doc) {
-        synchronized (this) {
-            if (frontier.size() > 10000) //no need to add more to queue they won't be visited
-                return;
-        }
-        //extract links from page
-        Elements linksOnPage = doc.select("a[href]");
+    public void extractLinks(Document doc, int docId) {
 
-        List<String> myLinks = new LinkedList<String>();
+
+        //get all links from document
+        List<String> myLinks = getLinks(doc);
+
+       //save links to their source
+        saveLinks(myLinks, docId);
+
+        //add extracted links to frontier if they're not duplicated
+        synchronized (this) {
+            try {
+
+                //remove queued and visited from extracted links
+                //first option
+                /*myLinks.removeAll(frontier);
+                myLinks.removeAll(visited);*/
+
+                //second option remove duplicates
+                /*LinkedHashSet<String> temp=new LinkedHashSet<String>();
+                temp.addAll(frontier);
+                temp.addAll(myLinks);
+                frontier.clear();
+                frontier.addAll(temp);
+                System.out.println(frontier.size());*/
+
+                frontier.addAll(myLinks); //add them to queue
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+
+    }
+
+    public List<String> getLinks(Document doc) {
+
+        Elements linksOnPage = doc.select("a[href]");
+        HashSet<String> myLinks = new HashSet<String>();
         System.out.println("extracting links");
 
         for (Element page : linksOnPage) //for every link on page
@@ -214,36 +264,89 @@ public class Crawler {
 
 
             } catch (MalformedURLException e) { //if url isn't in  a valid format , exception thrown
-                if(!link.trim().equals(""))
+                if (!link.trim().equals(""))
                     System.out.println(link + " isn't a valid url");
                 continue;
             }
 
             //check that url doesn't contain login, ads or not extracted already
 
-            if (!normalized.contains("login") && !normalized.contains("signup") && !normalized.contains("signin") && !myLinks.contains(normalized))
+            if (filterLink(normalized))
                 myLinks.add(normalized);
         }
 
+        return new ArrayList<String>(myLinks);
 
-        //add extracted links to frontier if they're not duplicated
-        synchronized (this){
+    }
+
+    public Boolean filterLink(String link)
+    {
+        if(link.contains("login") || link.contains("signup") || link.contains("signin"))
+            return false;
+        if(link.contains("ads") || link.contains("sponsor") || link.contains("search"))
+            return false;
+        if (link.contains("stanford.edu/site") || link.contains("cookies") || link.contains("facebook"))
+            return false;
+        if(link.contains("about") || link.contains("privacypolicy") || link.contains("contact"))
+            return false;
+        if(link.contains("emergency.stanford.edu") || link.contains("support.twitter.com") || link.contains("twitter.com/tos"))
+            return false;
+        if(link.contains("status.twitter.com") || link.contains("privacy_policy"))
+            return false;
+
+        return true;
+
+
+    }
+    public void saveLinks(List<String> links, int doc) {
+
+        //save extracted links in frontier
+        DB mydb = new DB();
+        for (String s : links) {
+            String result = "";
             try {
+                MessageDigest crypt = MessageDigest.getInstance("SHA-1");
+                crypt.reset();
+                crypt.update(s.getBytes("UTF-8"));
+                result = new BigInteger(1, crypt.digest()).toString();
 
-                //remove queued and visited from extracted links
-                myLinks.removeAll(frontier);
-                myLinks.removeAll(visited);
+                String sql = "insert into frontier (hash,url) VALUES ( ? ,?);";
 
-                frontier.addAll(myLinks); //add them to queue
+                PreparedStatement stmt = mydb.conn2.prepareStatement(sql);
+                stmt.setString(1, result);
+                stmt.setString(2, s);
+                stmt.execute();
+                linkPage(doc, result, mydb);
 
-                FileUtils.writeLines(new File("frontier.txt"), frontier, false); //write frontier to file to save state
-
-            } catch (IOException e) {
-                e.printStackTrace();
+            } catch (SQLException e) {
+                if (e.getErrorCode() == 1062) {
+                    //duplicate primary key, already exists
+                    linkPage(doc, result, mydb);
+                }
+            } catch (NoSuchAlgorithmException b) {
+                System.out.println("couldn't generate hash");
+            } catch (UnsupportedEncodingException c) {
+                System.out.println("error in encoding to utf-8 before hashing");
             }
+
+
         }
+    }
+
+    public void linkPage(int docId, String hash, DB myDB) {
 
 
+        try {
+            String sql = "insert into document_link (doc_id,link_id) VALUES ( ? ,?);";
+
+            PreparedStatement stmt = myDB.conn2.prepareStatement(sql);
+            stmt.setInt(1, docId);
+            stmt.setString(2, hash);
+            stmt.execute();
+
+        } catch (SQLException e) {
+            System.out.println("error linking page to url for doc_id "  + docId);
+        }
     }
 
 
@@ -254,7 +357,8 @@ public class Crawler {
 
         //if there's no conenction wait till it gets back
         //else continue crawling and ignore url
-        while (!checkConnectivity()) {}
+        while (!checkConnectivity()) {
+        }
 
     }
 
@@ -278,7 +382,7 @@ public class Crawler {
 
     public boolean checkLanguage(String txt) {
         //some extended ascii codes that migh be mistaken for another language
-        int[] chars = {8220, 8221, 8226, 8211, 8212, 732, 8482, 169, 174, 175,8230,8217, 8216};
+        int[] chars = {8220, 8221, 8226, 8211, 8212, 732, 8482, 169, 174, 175, 8230, 8217, 8216};
         char[] myNameChars = txt.toCharArray();
 
         for (int i = 0; i < txt.length(); i++) {
@@ -311,7 +415,7 @@ public class Crawler {
 
         ResultSet result = null;
 
-        Queue<String> s = new LinkedList<String>();
+        HashSet<String> s = new HashSet<String>();
         try {
             result = db.runSql(query);
 
@@ -324,24 +428,24 @@ public class Crawler {
             return;
         }
 
+        System.out.println("loaded visited docs");
         //load frontier from file
         Queue<String> f = new LinkedList<String>();
-
-        Scanner in = null;
+        String query2 = "select url from frontier where url not in (select url from documents);";
+        ResultSet result2 = null;
         try {
-            in = new Scanner(new File("frontier.txt"));
-        } catch (FileNotFoundException e) {
-            System.out.println("error loading frontier");
-        }
-        while (in.hasNext()) {
-            String m = in.nextLine();
-            if(!f.contains(m))
-                f.add(m);
-        }
-        in.close();
+            result2 = db.runSql(query2);
 
-        //remove visited from frontier
-        f.removeAll(s);
+            while (result2.next()) {
+                String x = result2.getString("url");
+                f.add(x);
+            }
+
+        } catch (SQLException e) {
+            System.out.print("error in fetching frontier from database");
+            return;
+        }
+
 
         //set my frontier and visited
 
@@ -351,13 +455,13 @@ public class Crawler {
         docs = visited.size();// set number of downloaded documents to files in database
 
 
-
     }
 
     public void updateVisited() {
         //updating downloaded documents starting from oldest
         DB crawlerDB = new DB();
 
+        int count =0;
         String[] arr = null;
         synchronized (this) {
             arr = new String[visited.size()];
@@ -375,21 +479,78 @@ public class Crawler {
 
 
             Document doc = null;
-            String s = "";
+            String s1, s2, html = "";
+
 
             try {
-                Response response = Jsoup.connect(url).userAgent("Mozilla").timeout(10000).ignoreHttpErrors(true).execute();
+                Response response = Jsoup.connect(url).userAgent("Mozilla").timeout(5000).ignoreHttpErrors(true).execute();
                 int statusCode = response.statusCode();
                 if (statusCode == 200) {
                     doc = response.parse();
-                    s = doc.html();
-                    String sql = "UPDATE documents SET content=? WHERE url = ?;";
+                    s1 = doc.body().text();//from interner
+                    html = doc.body().html();
 
                     try {
-                        PreparedStatement stmt = (PreparedStatement) crawlerDB.conn.prepareStatement(sql);
-                        stmt.setString(1, s);
-                        stmt.setString(2, url);
-                        stmt.execute();
+                        //badal da a3ml query ycheck
+
+                        //get url from database and check if text changed
+                        String q2 = "select id from documents where url = ? and text =? ";
+                        PreparedStatement stmt = crawlerDB.conn2.prepareStatement(q2);
+                        if (stmt == null)
+                           continue;
+
+                        stmt.setString(1, url);
+                        stmt.setString(2, s1);
+
+                        ResultSet res = stmt.executeQuery();
+                        if(res.next()) //text found in database, no need for update
+                        {
+                            continue;
+                        }
+                        else{ //text changed, update it and
+
+                            System.out.println("changed content in "+url);
+                            count++;
+                            int docId=0;
+
+                            String sql = "UPDATE documents SET content=?, text= ?, indexed= ?, title =? WHERE url = ?;";
+
+                            PreparedStatement stmt2 = crawlerDB.conn2.prepareStatement(sql);
+                            stmt2.setString(1, html); //new page content
+                            stmt2.setString(2, s1); //new text
+                            stmt2.setBoolean(3, false); //not indexed
+                            stmt2.setString(4,doc.title());
+                            stmt2.setString(5, url);
+                            stmt2.execute(); //update document
+
+                            String sql2 = "select id from documents where url = ?; ";
+                            PreparedStatement stmt3 = crawlerDB.conn2.prepareStatement(sql2);
+                            stmt3.setString(1,url);
+                            ResultSet rs = stmt3.executeQuery();
+                            ; //get id of updated document
+                            if (rs.next()) {
+                                docId = rs.getInt("id");
+                                System.out.println("id of updated document is " + docId);
+
+                            }
+
+
+
+                            //delete old links
+                            deleteLinks(docId, crawlerDB);
+                            System.out.println("deleted links from document_link");
+
+                            //extract new links
+                            List<String> links = getLinks(doc);
+
+                            //save new links
+                            saveLinks(links,docId);
+                            System.out.println("added new links links from document_link");
+
+
+                        }
+
+
                     } catch (SQLException e) {
                         System.out.println("error in updating database");
                         continue;
@@ -400,12 +561,28 @@ public class Crawler {
 
             } catch (IOException e) {
                 System.err.println("Error in updating " + url + "': " + e.getMessage());
-                if(e.getMessage().contains("connect timed out") || e.getMessage().contains("Read timed out"))
+                if (e.getMessage().contains("connect timed out") || e.getMessage().contains("Read timed out"))
                     Wait();
 
 
             }
 
+        }
+
+        System.out.println("no. of updated pages is " + count);
+    }
+
+    public void deleteLinks (int docId, DB myDb)
+    {
+        try{
+            String query = "Delete from document_link where doc_id= ?;";
+            PreparedStatement s = myDb.conn2.prepareStatement(query);
+            s.setInt(1,docId);
+            s.execute();
+
+        }catch(SQLException s)
+        {
+            System.out.println("error in deleting links");
         }
     }
 

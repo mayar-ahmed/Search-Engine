@@ -1,12 +1,24 @@
-https://archive.org
+
 https://en.wikipedia.org
-http://wikihow.com/main-page
-https://nytimes.com
-http://bbc.com
-http://w3.org
-http://stanford.edu
-http://dmoz.org
 https://answers.yahoo.com
-https://cnet.com
-https://en-maktoob.yahoo.com
+http://w3.org
+http://wikihow.com/main-page
 http://web.mit.edu
+http://bbc.com
+https://nytimes.com
+https://archive.org
+https://en-maktoob.yahoo.com
+https://cnet.com
+http://stanford.edu
+
+INSERT INTO `frontier` (`hash`, `url`) VALUES
+  ('1247045332422773120857891153901510329490484843634','https://en.wikipedia.org'),
+  ('69510512837158648140981976378405380966042364889','https://answers.yahoo.com'),
+ ('336648443862541143722243769583897131092429202545', 'http://w3.org'),
+('1022228566171586118384342785552775528622737326034', 'http://wikihow.com/main-page'),
+  ('241984332585295334402890578725302309111268575883', 'http://bbc.com'),
+  ('1308916901338284533469781295343301182935920143577', 'https://nytimes.com'),
+  ('1153899299141167529356438577731158649231379595766', 'https://archive.org'),
+  ('338683632911216311274426936203011949732996177192', 'https://en-maktoob.yahoo.com'),
+  ('508511394106228917840081900622016657856723780864', 'https://cnet.com'),
+   ('553861857914303050119114242167840681075478260307', 'http://stanford.edu');
